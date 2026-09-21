@@ -1,6 +1,17 @@
 import json
 import uuid
 import asyncio
+import logging
+from dotenv import load_dotenv
+load_dotenv()  # Must run before ANY import that calls os.getenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("proofpath.main")
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -8,6 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from orchestrator import Orchestrator
 from agents.retrieval import get_provider_health
+from agents.llm_client import (
+    get_active_provider, list_configured_providers,
+    validate_llm_on_startup, get_last_errors
+)
 
 app = FastAPI(title="ProofPath v2", description="Evidence-First Autonomous Research System")
 
@@ -21,6 +36,24 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 orchestrator = Orchestrator()
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Validate LLM connectivity on server start so problems are visible immediately."""
+    logger.info("=" * 60)
+    logger.info("ProofPath v2 — starting up")
+    logger.info("=" * 60)
+    report = await validate_llm_on_startup()
+    if report["status"] == "no_providers":
+        logger.error(
+            "⚠  NO LLM KEYS FOUND in .env!\n"
+            "   Add GROQ_API_KEY (free): https://console.groq.com\n"
+            "   or GEMINI_API_KEY (free): https://aistudio.google.com/app/apikey"
+        )
+    elif report["status"] == "all_failed":
+        logger.error("⚠  All LLM providers failed startup test — check .env keys")
+    logger.info("=" * 60)
 
 
 # ── Request models ──────────────────────────────────────────────────────────
@@ -151,10 +184,22 @@ async def get_conflicts(run_id: str):
 
 @app.get("/api/health")
 async def health():
-    """Provider health and system status."""
+    """Provider health, LLM status, and last error details."""
     return {
         "status": "ok",
-        "providers": {"tavily": get_provider_health()},
+        "retrieval": {"tavily": get_provider_health()},
+        "llm": {
+            "active_provider": get_active_provider(),
+            "configured_providers": list_configured_providers(),
+            "last_errors": get_last_errors(),  # Shows WHY fallback happened
+        },
         "active_runs": len(orchestrator.run_queues),
         "completed_runs": len(orchestrator.completed_states),
     }
+
+
+@app.get("/api/test-llm")
+async def test_llm():
+    """Live-test all configured LLM providers. Use this to debug connectivity."""
+    report = await validate_llm_on_startup()
+    return report

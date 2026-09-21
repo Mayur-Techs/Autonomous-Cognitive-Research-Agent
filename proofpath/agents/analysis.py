@@ -1,12 +1,9 @@
-import os
 import json
 import re
 import uuid
 import asyncio
-from openai import AsyncOpenAI
+from agents.llm_client import chat_complete
 from models import Claim, SubQuestion, Source, EvidenceSpan
-
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 ANALYSIS_PROMPT = """Sub-question: "{sub_question}"
 Source text: "{raw_text}"
@@ -15,11 +12,11 @@ For each claim:
   - Write one precise atomic fact (one idea only).
   - Quote the EXACT sentence or phrase from the source text that supports it —
     copy it character-for-character, do not paraphrase the quote.
-Return strict JSON: [{{"text": "...", "quote": "..."}}]"""
+Return strict JSON inside a ```json block: [{{"text": "...", "quote": "..."}}]"""
 
 
 def _find_span(document_text: str, quote: str) -> tuple[int, int] | None:
-    """Locate exact character offsets of a quote inside the document (normalised whitespace)."""
+    """Locate exact character offsets of a quote inside the document."""
     norm = lambda s: " ".join(s.split())
     norm_doc = norm(document_text)
     norm_quote = norm(quote)
@@ -29,29 +26,34 @@ def _find_span(document_text: str, quote: str) -> tuple[int, int] | None:
     return (idx, idx + len(norm_quote))
 
 
-async def extract_claims(sub_q: SubQuestion, source: Source) -> tuple[list[Claim], list[EvidenceSpan]]:
-    truncated_text = source.raw_text[:12000] if source.raw_text else ""
+async def extract_claims(
+    sub_q: SubQuestion, source: Source
+) -> tuple[list[Claim], list[EvidenceSpan]]:
+    truncated_text = source.raw_text[:10000] if source.raw_text else ""
 
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a precise data extraction assistant. Return ONLY valid JSON array in a markdown block."
-            },
-            {
-                "role": "user",
-                "content": ANALYSIS_PROMPT.format(sub_question=sub_q.text, raw_text=truncated_text)
-            }
-        ],
-        temperature=0.0
-    )
+    try:
+        content = await chat_complete(
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a precise data extraction assistant. Return ONLY a valid JSON array in a ```json block.",
+                },
+                {
+                    "role": "user",
+                    "content": ANALYSIS_PROMPT.format(
+                        sub_question=sub_q.text, raw_text=truncated_text
+                    ),
+                },
+            ],
+            temperature=0.0,
+        )
+    except Exception:
+        return [], []
 
-    content = response.choices[0].message.content
-    blocks = re.findall(r'```(?:json)?\s*(\[.*?\])\s*```', content, re.DOTALL)
+    blocks = re.findall(r"```(?:json)?\s*(\[.*?\])\s*```", content, re.DOTALL)
     json_str = blocks[-1] if blocks else None
     if not json_str:
-        arrays = re.findall(r'\[\s*\{.*?\}\s*\]', content, re.DOTALL)
+        arrays = re.findall(r"\[\s*\{.*?\}\s*\]", content, re.DOTALL)
         json_str = arrays[-1] if arrays else None
     if not json_str:
         return [], []
@@ -68,7 +70,6 @@ async def extract_claims(sub_q: SubQuestion, source: Source) -> tuple[list[Claim
         quote = item.get("quote", "")
         span_id = f"span_{uuid.uuid4().hex[:8]}"
 
-        # Build EvidenceSpan with character offsets
         offsets = _find_span(source.raw_text, quote) if quote else None
         if offsets:
             span = EvidenceSpan(
@@ -80,7 +81,7 @@ async def extract_claims(sub_q: SubQuestion, source: Source) -> tuple[list[Claim
             )
             spans.append(span)
         else:
-            span_id = None  # Span not found — fact_checker will reject this claim
+            span_id = None
 
         claim = Claim(
             id=f"claim_{uuid.uuid4().hex[:8]}",

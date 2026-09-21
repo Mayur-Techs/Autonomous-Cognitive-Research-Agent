@@ -181,9 +181,13 @@ cp .env.example .env
 ## Environment Variables
 
 ```
-OPENAI_API_KEY=...   # Required — GPT-4o for planner/verifier/synthesis
-TAVILY_API_KEY=...   # Required — web retrieval (free tier available)
+GROQ_API_KEY=...       # Required — Fastest, FREE models
+GEMINI_API_KEY=...     # Required — Google's FREE models
+OPENROUTER_API_KEY=... # Required — Free Llama models
+TAVILY_API_KEY=...     # Required — web retrieval (free tier available)
 ```
+
+**Note:** You only strictly need *one* of the LLM keys (Groq, Gemini, or OpenRouter). The system will automatically fall back if one runs out of quota.
 
 ## Running
 

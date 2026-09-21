@@ -49,7 +49,8 @@ async def startup_event():
         logger.error(
             "⚠  NO LLM KEYS FOUND in .env!\n"
             "   Add GROQ_API_KEY (free): https://console.groq.com\n"
-            "   or GEMINI_API_KEY (free): https://aistudio.google.com/app/apikey"
+            "   or GEMINI_API_KEY (free): https://aistudio.google.com/app/apikey\n"
+            "   or OPENROUTER_API_KEY (free): https://openrouter.ai/keys"
         )
     elif report["status"] == "all_failed":
         logger.error("⚠  All LLM providers failed startup test — check .env keys")

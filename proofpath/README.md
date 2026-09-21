@@ -199,7 +199,6 @@ uvicorn main:app --reload
 ## Running Tests
 
 ```bash
-pip install pytest
 pytest tests/ -v
 ```
 

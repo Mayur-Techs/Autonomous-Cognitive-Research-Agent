@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProofPath — Evidence-First Research</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --accent: #4f8ef7;
+    --accent2: #7c5cfc;
+    --text: #e2e8f0;
+    --muted: #8892a4;
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+  /* ─── Layout ─── */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: -0.5px; }
+  .logo span { color: var(--accent2); }
+  .tagline { font-size: 12px; color: var(--muted); }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 20px; }
+
+  /* ─── Search ─── */
+  .search-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 28px; }
+  .search-card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 14px; }
+  .search-row { display: flex; gap: 12px; }
+  #question { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; font-size: 15px; color: var(--text); outline: none; transition: border-color 0.2s; }
+  #question:focus { border-color: var(--accent); }
+  #start-btn { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 14px 28px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+  #start-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ─── Metrics bar ─── */
+  #metrics-bar { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 24px; margin-bottom: 24px; }
+  .metrics-grid { display: flex; flex-wrap: wrap; gap: 18px; }
+  .metric { display: flex; flex-direction: column; gap: 4px; }
+  .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .metric-value { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .stop-reason { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .stop-reason span { color: var(--green); font-weight: 600; }
+
+  /* ─── Two-column layout ─── */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+
+  /* ─── Panels ─── */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .panel-header .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .panel-body { padding: 14px 18px; max-height: 320px; overflow-y: auto; }
+
+  /* ─── Trace ─── */
+  .trace-entry { font-family: 'Consolas', monospace; font-size: 12px; color: var(--muted); padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .trace-entry .ts { color: var(--accent2); margin-right: 8px; }
+  .trace-entry .ev { color: var(--text); }
+
+  /* ─── Sub-questions ─── */
+  .sq-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .sq-item:last-child { border-bottom: none; }
+  .sq-tier { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+  .tier-foundational { background: #1e3a5f; color: #7eb8f7; }
+  .tier-dependent { background: #2d1b69; color: #b79cfc; }
+  .sq-status { font-size: 11px; margin-top: 4px; }
+  .status-answered { color: var(--green); }
+  .status-insufficient_evidence { color: var(--yellow); }
+  .status-researching { color: var(--orange); }
+  .status-blocked { color: var(--red); }
+  .status-pending, .status-ready { color: var(--muted); }
+  .sq-text { font-size: 13px; margin-top: 5px; line-height: 1.5; }
+
+  /* ─── Claims ─── */
+  .claim-item { padding: 12px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .claim-item:hover { background: rgba(255,255,255,0.02); }
+  .claim-item:last-child { border-bottom: none; }
+  .claim-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+  .badge-supported { background: #065f46; color: #6ee7b7; }
+  .badge-contradicted { background: #7f1d1d; color: #fca5a5; }
+  .badge-unresolved { background: #78350f; color: #fde68a; }
+  .badge-rejected { background: #1f2937; color: #9ca3af; }
+  .badge-insufficient_evidence { background: #1f2937; color: #9ca3af; }
+  .conf-badge { font-size: 10px; padding: 2px 7px; border-radius: 4px; background: var(--border); color: var(--muted); }
+  .claim-text { font-size: 13px; line-height: 1.5; color: var(--text); }
+  .claim-quote { font-size: 11px; font-style: italic; color: var(--muted); margin-top: 6px; border-left: 2px solid var(--accent2); padding-left: 8px; }
+
+  /* ─── Conflicts ─── */
+  .conflict-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .conflict-item:last-child { border-bottom: none; }
+  .conflict-vs { font-size: 11px; color: var(--red); font-weight: 700; margin: 6px 0; }
+  .conflict-claim { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .conflict-reason { font-size: 11px; color: var(--yellow); margin-top: 6px; }
+
+  /* ─── Report ─── */
+  #report-section { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-top: 24px; }
+  #report-section .panel-header { padding: 18px 24px; }
+  #report-body { padding: 24px; line-height: 1.8; font-size: 14px; }
+  #report-body h1 { font-size: 20px; color: var(--accent); margin-bottom: 16px; }
+  #report-body h2 { font-size: 15px; color: var(--accent2); margin: 20px 0 8px; }
+  #report-body p { color: var(--text); margin-bottom: 10px; }
+
+  /* ─── Gap panel ─── */
+  .gap-item { padding: 12px; background: rgba(251,191,36,0.07); border: 1px solid rgba(251,191,36,0.2); border-radius: 8px; margin-bottom: 10px; }
+  .gap-label { font-size: 11px; font-weight: 700; color: var(--yellow); text-transform: uppercase; margin-bottom: 4px; }
+  .gap-text { font-size: 13px; color: var(--text); }
+  .gap-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ─── Empty states ─── */
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; padding: 12px 0; }
+
+  /* ─── Spinner ─── */
+  .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--muted); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div>
+    <div class="logo">Proof<span>Path</span></div>
+    <div class="tagline">Evidence-First Autonomous Research System</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Search -->
+  <div class="search-card">
+    <h2>Research Question</h2>
+    <div class="search-row">
+      <input id="question" type="text"
+        placeholder="e.g. What factors influence human attention during prolonged cognitive tasks?" />
+      <button id="start-btn" onclick="startResearch()">Start Research</button>
+    </div>
+  </div>
+
+  <!-- Metrics bar -->
+  <div id="metrics-bar">
+    <div class="metrics-grid">
+      <div class="metric"><span class="metric-label">Sub-questions</span><span class="metric-value" id="m-sqs">—</span></div>
+      <div class="metric"><span class="metric-label">Sources</span><span class="metric-value" id="m-sources">—</span></div>
+      <div class="metric"><span class="metric-label">Claims</span><span class="metric-value" id="m-claims">—</span></div>
+      <div class="metric"><span class="metric-label">Verified</span><span class="metric-value" id="m-verified" style="color:var(--green)">—</span></div>
+      <div class="metric"><span class="metric-label">Conflicts</span><span class="metric-value" id="m-conflicts" style="color:var(--red)">—</span></div>
+      <div class="metric"><span class="metric-label">Coverage</span><span class="metric-value" id="m-coverage">—</span></div>
+      <div class="metric"><span class="metric-label">LLM Calls</span><span class="metric-value" id="m-llm">—</span></div>
+      <div class="metric"><span class="metric-label">Searches</span><span class="metric-value" id="m-searches">—</span></div>
+    </div>
+    <div class="stop-reason" id="stop-reason" style="display:none">Stop reason: <span id="stop-reason-val"></span></div>
+  </div>
+
+  <!-- Main panels grid -->
+  <div class="cols">
+
+    <!-- Live Trace -->
+    <div class="panel">
+      <div class="panel-header"><div class="dot"></div>Live Research Trace</div>
+      <div class="panel-body" id="trace-log"><p class="empty">Trace will appear here…</p></div>
+    </div>
+
+    <!-- Sub-questions / Dependency Graph -->
+    <div class="panel">
+      <div class="panel-header"><div class="dot" style="background:var(--accent2)"></div>Research Plan</div>
+      <div class="panel-body" id="subq-list"><p class="empty">Sub-questions will appear here…</p></div>
+    </div>
+
+  </div>
+
+  <div class="cols" style="margin-top:20px">
+
+    <!-- Claims -->
+    <div class="panel">
+      <div class="panel-header"><div class="dot" style="background:var(--green)"></div>Claim Explorer</div>
+      <div class="panel-body" id="claim-list"><p class="empty">Claims will appear after verification…</p></div>
+    </div>
+
+    <!-- Right column: Conflicts + Evidence Gaps -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="panel">
+        <div class="panel-header"><div class="dot" style="background:var(--red)"></div>Contradictions</div>
+        <div class="panel-body" id="conflict-list"><p class="empty">No contradictions detected yet.</p></div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><div class="dot" style="background:var(--yellow)"></div>Evidence Gaps</div>
+        <div class="panel-body" id="gap-list"><p class="empty">Evidence gaps will appear here…</p></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Final Report -->
+  <div id="report-section">
+    <div class="panel-header" style="padding:18px 24px">
+      <div class="dot" style="background:var(--accent)"></div>Final Research Report
+    </div>
+    <div id="report-body"></div>
+  </div>
+
+</main>
+
+<script>
+let currentRunId = null;
+let claimsData = [];
+let subqData = [];
+
+function el(id) { return document.getElementById(id); }
+
+function updateMetrics(m) {
+  if (!m) return;
+  el('m-sqs').textContent = m.total_subquestions ?? '—';
+  el('m-sources').textContent = m.total_sources ?? '—';
+  el('m-claims').textContent = (m.supported_claims + m.contradicted_claims + m.unresolved_claims + m.rejected_claims) || '—';
+  el('m-verified').textContent = m.supported_claims ?? '—';
+  el('m-conflicts').textContent = m.total_conflicts ?? '—';
+  el('m-coverage').textContent = m.coverage_pct != null ? m.coverage_pct + '%' : '—';
+  el('m-llm').textContent = m.llm_calls ?? '—';
+  el('m-searches').textContent = m.searches ?? '—';
+  el('metrics-bar').style.display = 'block';
+}
+
+function renderSubQuestions(sqs) {
+  subqData = sqs;
+  const container = el('subq-list');
+  if (!sqs || !sqs.length) return;
+  container.innerHTML = sqs.map(sq => `
+    <div class="sq-item">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="sq-tier tier-${sq.tier}">${sq.tier}</span>
+        <span class="sq-status status-${sq.status}">${sq.status}</span>
+      </div>
+      <div class="sq-text">${escHtml(sq.text)}</div>
+    </div>
+  `).join('');
+}
+
+function statusBadge(status) {
+  return `<span class="badge badge-${status}">${status.replace('_', ' ')}</span>`;
+}
+
+function renderClaims(claims) {
+  claimsData = claims;
+  const container = el('claim-list');
+  if (!claims || !claims.length) {
+    container.innerHTML = '<p class="empty">No claims extracted yet.</p>';
+    return;
+  }
+  container.innerHTML = claims.map((c, i) => `
+    <div class="claim-item" onclick="showClaimDetail(${i})">
+      <div class="claim-header">
+        ${statusBadge(c.verification_status)}
+        ${c.confidence ? `<span class="conf-badge">confidence: ${c.confidence}</span>` : ''}
+      </div>
+      <div class="claim-text">${escHtml(c.text)}</div>
+      ${c.quote ? `<div class="claim-quote">"${escHtml(c.quote.substring(0,200))}${c.quote.length > 200 ? '…' : ''}"</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderConflicts(conflicts) {
+  const container = el('conflict-list');
+  if (!conflicts || !conflicts.length) {
+    container.innerHTML = '<p class="empty">No contradictions detected.</p>';
+    return;
+  }
+  container.innerHTML = conflicts.map(c => `
+    <div class="conflict-item">
+      <div class="conflict-claim">${escHtml(c.claim_a.substring(0, 140))}…</div>
+      <div class="conflict-vs">⚡ VS</div>
+      <div class="conflict-claim">${escHtml(c.claim_b.substring(0, 140))}…</div>
+      <div class="conflict-reason">Reason: ${escHtml(c.reason || 'Unresolved')}</div>
+    </div>
+  `).join('');
+}
+
+function renderGaps(sqs) {
+  const gapSqs = (sqs || []).filter(sq => sq.status === 'insufficient_evidence' || sq.status === 'failed');
+  const container = el('gap-list');
+  if (!gapSqs.length) {
+    container.innerHTML = '<p class="empty">No evidence gaps detected.</p>';
+    return;
+  }
+  container.innerHTML = gapSqs.map(sq => `
+    <div class="gap-item">
+      <div class="gap-label">⚠ Insufficient Evidence</div>
+      <div class="gap-text">${escHtml(sq.text)}</div>
+      <div class="gap-note">The system could not find verified evidence for this sub-question.</div>
+    </div>
+  `).join('');
+}
+
+function showClaimDetail(idx) {
+  const c = claimsData[idx];
+  if (!c) return;
+  const sq = subqData.find(s => s.id === c.sub_question_id);
+  alert(
+    `CLAIM\n${c.text}\n\n` +
+    `STATUS: ${c.verification_status}\n` +
+    `CONFIDENCE: ${c.confidence || 'N/A'}\n` +
+    (sq ? `SUB-QUESTION: ${sq.text}\n` : '') +
+    `\nEVIDENCE QUOTE:\n"${c.quote}"\n\n` +
+    `Source ID: ${c.source_id}\n` +
+    `Evidence Span ID: ${c.evidence_span_id || 'N/A'}`
+  );
+}
+
+function renderReport(markdown) {
+  const body = el('report-body');
+  const section = el('report-section');
+  // Minimal markdown rendering: h1, h2, paragraphs
+  let html = escHtml(markdown)
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  body.innerHTML = `<p>${html}</p>`;
+  section.style.display = 'block';
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function addTraceEntry(event) {
+  const container = el('trace-log');
+  if (container.querySelector('.empty')) container.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'trace-entry';
+  const elapsed = event.elapsed_s != null ? `+${event.elapsed_s}s` : '';
+  div.innerHTML = `<span class="ts">${elapsed}</span><span class="ev">${escHtml(event.event)}</span>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function startResearch() {
+  const question = el('question').value.trim();
+  if (!question) return;
+
+  const btn = el('start-btn');
+  btn.disabled = true;
+  btn.textContent = 'Researching…';
+
+  // Reset UI
+  el('trace-log').innerHTML = '<p class="empty">Connecting…</p>';
+  el('subq-list').innerHTML = '<p class="empty">Waiting for planner…</p>';
+  el('claim-list').innerHTML = '<p class="empty">Claims will appear after verification…</p>';
+  el('conflict-list').innerHTML = '<p class="empty">No contradictions detected yet.</p>';
+  el('gap-list').innerHTML = '<p class="empty">Evidence gaps will appear here…</p>';
+  el('report-section').style.display = 'none';
+  el('stop-reason').style.display = 'none';
+  el('metrics-bar').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/research', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question })
+    });
+    const data = await res.json();
+    currentRunId = data.run_id;
+
+    const es = new EventSource(`/api/research/${currentRunId}/events`);
+
+    es.onmessage = async (e) => {
+      const payload = JSON.parse(e.data);
+
+      if (payload.metrics) updateMetrics(payload.metrics);
+      if (payload.subquestions) renderSubQuestions(payload.subquestions);
+
+      addTraceEntry(payload);
+
+      if (payload.event === 'done') {
+        es.close();
+        btn.disabled = false;
+        btn.textContent = 'Start Research';
+
+        // Final metrics
+        if (payload.metrics) updateMetrics(payload.metrics);
+        if (payload.stop_reason) {
+          el('stop-reason-val').textContent = payload.stop_reason;
+          el('stop-reason').style.display = 'block';
+        }
+
+        // Fetch detailed data
+        try {
+          const [claimsRes, conflictsRes, stateRes] = await Promise.all([
+            fetch(`/api/research/${currentRunId}/claims`),
+            fetch(`/api/research/${currentRunId}/conflicts`),
+            fetch(`/api/research/${currentRunId}`)
+          ]);
+          const claimsJson = await claimsRes.json();
+          const conflictsJson = await conflictsRes.json();
+          const stateJson = await stateRes.json();
+
+          renderClaims(claimsJson.claims || []);
+          renderConflicts(conflictsJson.conflicts || []);
+          renderSubQuestions(stateJson.subquestions || []);
+          renderGaps(stateJson.subquestions || []);
+        } catch (_) {}
+
+        if (payload.report) renderReport(payload.report);
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+      btn.disabled = false;
+      btn.textContent = 'Start Research';
+      addTraceEntry({ event: 'Connection lost or run complete', elapsed_s: null });
+    };
+
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    btn.textContent = 'Start Research';
+  }
+}
+
+// Allow Enter key
+document.addEventListener('DOMContentLoaded', () => {
+  el('question').addEventListener('keydown', e => {
+    if (e.key === 'Enter') startResearch();
+  });
+});
+</script>
+</body>
+</html>
